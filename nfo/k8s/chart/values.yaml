@@ -1,0 +1,48 @@
+replicaCount: 1
+
+image:
+  repository: bmw.ece.ntust.edu.tw/shuchu11/nfo
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: NodePort
+  port: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  hosts:
+    - host: nfo.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+env:
+  - name: DJANGO_SETTINGS_MODULE
+    value: "nfo_microservice.settings"
+  - name: PYTHONUNBUFFERED
+    value: "1"
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+  mountPath: /app/data
+
+config:
+  secretKey: "django-insecure-nfo-dev-key-change-in-prod"
+  debug: "false"
+  allowedHosts: "*"
+
+kubeconfig:
+  enabled: true
+  mountPath: /app/config

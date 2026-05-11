@@ -66,6 +66,32 @@ The O-RAN Software Community (OSC) and Open Air Interface (OAI) and Nephio open 
 
 # ETSI SOL003 Implementation
 
+## Docker
+
+1. Build image
+
+    ```
+    # Assume we are using our own Image registry at bmw.ece.ntust.edu.tw
+    # QUAY_USERNAME is your Quay account username
+    docker login bmw.ece.ntust.edu.tw
+    docker build -t bmw.ece.ntust.edu.tw/{QUAY_USERNAME}/nfo:latest .
+    docker push bmw.ece.ntust.edu.tw/{QUAY_USERNAME}/nfo:latest
+
+    ```
+
+2. Go to the `chart/` directory and update the `values.yaml` content of `image.repository` according to your account
+
+    ```
+    # cd chart/
+    # vi values.yaml
+    ...
+    image:
+      repository: bmw.ece.ntust.edu.tw/{QUAY_USERNAME}/nfo
+      pullPolicy: IfNotPresent
+      tag: "latest"
+    ...
+    ```
+
 ## Cluster MGMT
 
 1. Create Cluster Definition

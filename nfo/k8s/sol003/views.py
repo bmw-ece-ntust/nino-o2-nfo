@@ -297,8 +297,10 @@ class NfDeploymentInstanceViewSet(viewsets.ModelViewSet):
                 #     }
 
             # Prepare deployment details
-            deployment_name = f"nf-{instance.name.lower()}"
 
+            # Too long of a name lead to Helm failure
+            instance_name = instance.name.lower()
+            deployment_name = f"nf-{instance.name.lower()}"
 
             instance.deployment_namespace = namespace
             #instance.helm_release_name = helm_release_name
@@ -318,7 +320,7 @@ class NfDeploymentInstanceViewSet(viewsets.ModelViewSet):
             if descriptor.artifact_repo_url and descriptor.artifact_name:
                 logger.error("Helm Called...")
                 # Helm deployment
-                helm_release = f"nf-{instance.name.lower()}"
+                helm_release = f"nf-{uuid.uuid4()}"
                 helm_values = params.get('instantiation_params', {})
 
                 result = k8s_service.deploy_helm_chart(

@@ -1,6 +1,7 @@
 .tox
 docs/_build/*
 nfo/k8s/db.sqlite3
+nfo/k8s/venv
 # Python cache files
 __pycache__/
 *.py[cod]

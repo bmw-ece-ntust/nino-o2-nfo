@@ -24,7 +24,8 @@ SECRET_KEY = ' '
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.8.35']
+#ALLOWED_HOSTS = ['192.168.8.35', 'rappmanager.nonrtric.svc.cluster.local']
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -81,7 +82,7 @@ WSGI_APPLICATION = 'nfo_microservice.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': BASE_DIR / 'data/db.sqlite3',
     }
 }
 
