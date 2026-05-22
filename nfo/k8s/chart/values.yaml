@@ -1,13 +1,14 @@
 replicaCount: 1
 
 image:
-  repository: bmw.ece.ntust.edu.tw/shuchu11/nfo
+  repository: bmw.ece.ntust.edu.tw/shuchu11/nfo-service
   pullPolicy: IfNotPresent
-  tag: "latest"
+  tag: "dev"
 
 service:
   type: NodePort
   port: 8000
+  nodePort: 31028
 
 ingress:
   enabled: false

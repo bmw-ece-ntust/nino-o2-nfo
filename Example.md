@@ -10,11 +10,18 @@ Target:
 
 ## Skip the rAPP deploy nfo flow — deploy nfo directly using curl
 
+let's directly use the kubeconfig file which we got from [nino_o2_focom-branch/revised_Example.md](https://github.com/bmw-ece-ntust/nino-o2-focom/blob/revised/Example.md)
+
 Set `STARLINGX_KUBECONFIG_B64` as an environment variable:
+
+Enter on SMO server `Archimedes`:
+> Replace `/home/ubuntu/leo/smo-o2-focom` with the actual path of your FOCOM files.
+
 ```bash
 cd /home/ubuntu/leo/smo-o2-focom
-export STARLINGX_KUBECONFIG_B64=$(cat cluster.yaml | base64 -w 0)
+export STARLINGX_KUBECONFIG_B64=$(cat cluster_fixed.yaml | base64 -w 0)
 ```
+
 
 ### Main 6 Steps
 ```
@@ -34,8 +41,61 @@ Instantiate
 > When nfo later connects to the rApp API via `deploy_via_nfo()`, only the last 3 steps are invoked. The first 3 steps still need to be completed manually.
 
 
-Step 1 — Register Cluster
 
+Clone repo and switch to `revised` branch:
+**Replace `<Your SSH Key>` with your actual SSH key for GitHub access.**
+```bash
+git clone https://<Your SSH Key>@github.com/bmw-ece-ntust/nino-o2-nfo.git
+
+cd nino-o2-nfo
+git checkout revised
+
+```
+
+Build up image from `nfo` folder:
+
+- Build image and push to registry:
+> Replace `<your-username>` with your actual username for the Quay registry.
+```
+docker logout bmw.ece.ntust.edu.tw
+
+docker login bmw.ece.ntust.edu.tw
+
+# Build
+docker build -t bmw.ece.ntust.edu.tw/<your-username>/nfo:latest .   
+
+# Push
+docker push bmw.ece.ntust.edu.tw/<your-username>/nfo:latest
+```
+
+- Modify `values.yaml` 
+```
+image:
+  repository: bmw.ece.ntust.edu.tw/<your-username>/nfo
+  tag: latest       
+```
+
+
+```
+# Run nfo service
+cd /...Path to nfo folder.../nino-o2-nfo/nfo/k8s/chart
+
+helm install nfo . -n o2 --create-namespace
+
+
+# verify nfo service is running
+
+╭─ubuntu@zhongkui ~/testingSpace/nino-o2-nfo/nfo/k8s/chart ‹revised●›
+╰─$ kubectl get svc -n o2
+NAME   TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+nfo    NodePort   10.110.56.242   <none>        8000:31028/TCP   14s
+```
+
+NFO service port is `31028`
+
+
+Step 1 — Register Cluster
+> You can read Appendix of this note for "How to find STX Cluster's api endpoint?"
 ```bash
 curl -X POST http://192.168.8.69:31028/api/kubernetes-clusters/ \
   -H 'Content-Type: application/json' \
@@ -81,7 +141,10 @@ Step 2 — Set Credentials
 
 Replace `<cluster-id>` and `$STARLINGX_KUBECONFIG_B64` with the actual values:
 ```bash
-curl -X POST http://192.168.8.69:31028/api/kubernetes-clusters/<cluster-id>/set_credentials/ \
+
+export CLUSTER_ID=64893fdc-b04f-4938-86c6-7d7c93e652b6
+
+curl -X POST http://192.168.8.69:31028/api/kubernetes-clusters/$CLUSTER_ID/set_credentials/ \
   -H 'Content-Type: application/json' \
   -d '{
     "auth_method": "kubeconfig",
@@ -103,7 +166,7 @@ curl -X POST http://192.168.8.69:31028/api/kubernetes-clusters/<cluster-id>/set_
 Step 3 — Test Connection
 
 ```bash
-curl -X POST http://192.168.8.69:31028/api/kubernetes-clusters/<cluster-id>/test_connection/
+curl -X POST http://192.168.8.69:31028/api/kubernetes-clusters/$CLUSTER_ID/test_connection/
 
 #### Log ####
 
@@ -120,7 +183,6 @@ curl -X POST http://192.168.8.69:31028/api/kubernetes-clusters/<cluster-id>/test
 
 Step 4 — Create VNF Descriptor
 
-Replace `64893fdc-b04f-4938-86c6-7d7c93e652b6` with your cluster ID:
 ```bash
 curl -X POST http://192.168.8.69:31028/api/o2dms/v2/vnf_instances/ \
   -H 'Content-Type: application/json' \
@@ -130,7 +192,7 @@ curl -X POST http://192.168.8.69:31028/api/o2dms/v2/vnf_instances/ \
     "artifact_repo_url": "https://github.com/motangpuar/ocloud-helm-templates.git",
     "artifact_name": "oai-gnb-fhi-72",
     "artifact_repo_branch": "openshift/pegatron",
-    "target_cluster": "64893fdc-b04f-4938-86c6-7d7c93e652b6",
+    "target_cluster": "'"$CLUSTER_ID"'",
     "values": {}
   }' | jq .
 
@@ -170,10 +232,14 @@ Step 5 — Create Deployment
 
 Replace `6ddf0ecb-1fd2-418c-bca4-6434cdf78316` with your `descriptor_id`:
 ```bash
+
+export DESCRIPTOR_ID=6ddf0ecb-1fd2-418c-bca4-6434cdf78316
+
+
 curl -X POST http://192.168.8.69:31028/api/o2dms/v2/deployments/ \
   -H 'Content-Type: application/json' \
   -d '{
-    "descriptor": "6ddf0ecb-1fd2-418c-bca4-6434cdf78316",
+    "descriptor": "'"$DESCRIPTOR_ID"'",
     "name": "oai-gnb-test-deploy"
   }' | jq .
 
@@ -204,7 +270,9 @@ Note down the `instance_id`: `7041b5a0-16cd-47ee-8f6f-b63a8ebdce70`
 Step 6 — Instantiate (Actual Deployment):
 
 ```bash
-curl -X POST http://192.168.8.69:31028/api/o2dms/v2/deployments/7041b5a0-16cd-47ee-8f6f-b63a8ebdce70/instantiate/ \
+export INSTANCE_ID=7041b5a0-16cd-47ee-8f6f-b63a8ebdce70
+
+curl -X POST http://192.168.8.69:31028/api/o2dms/v2/deployments/$INSTANCE_ID/instantiate/ \
   -H 'Content-Type: application/json' \
   -d '{
     "instantiation_params": {
@@ -237,46 +305,29 @@ curl -X DELETE http://192.168.8.69:31028/api/kubernetes-clusters/<CLUSTER_ID>/
 A successful deletion returns `204 No Content` (empty response).
 
 
----
+## How to find STX Cluster's api endpoint?
 
-# Notes on items to be added to nfo
-## Deploy nfo
-### **https://github.com/bmw-ece-ntust/nino-o2-nfo/tree/dev/nfo/k8s#etsi-sol003-implementation**
+You can use random IP from the cluster nodes with port `30205` as the API endpoint.
 
-Create Cluster Definition:
-```bash
-curl -X POST http://192.168.8.69:8080/api/o2dms/v2/deployments/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "api_endpoint": "https://192.168.8.87:6443",
-    "auth_method": "kubeconfig",
-    "cluster_version": "v1.31.14",
-    "node_count": 2,
-    "supports_helm": true
-  }'
+- Location of api server ( `worker-0` in this case):
+```
+12:38:58 root@galileo ~ → kubectl get pod -n oran-o2 -o wide
+NAME                    READY   STATUS    RESTARTS   AGE     IP            NODE       NOMINATED NODE   READINESS GATES
+o2api-9ccd47478-8jmmf   5/5     Running   0          7d22h   172.16.43.9   worker-0   <none>           <none>
 ```
 
-- Port:
-```bash
-╭─ubuntu@zhongkui ~/leo
-╰─$ kubectl get svc -n o2                                                                                           7 ↵
-NAME   TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
-nfo    NodePort   10.97.187.151   <none>        8000:31028/TCP   132m
+- Service port:
+```
+08:41:49 root@galileo ~ → kubectl get svc -n oran-o2 | grep o2api
+o2api     NodePort   10.108.95.13   <none>        5005:30205/TCP    126d
 ```
 
-- How to get your `api_endpoint` (Master Node API Server location):
-```bash
-[master@localhost ~]$ kubectl cluster-info
-Kubernetes control plane is running at https://192.168.8.87:6443                      <------------------------------ 192.168.8.87:6443
-CoreDNS is running at https://192.168.8.87:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
-
-To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+- Final API endpoint: `https://<Any STX node's INTERNAL-IP>:30205` . You can use any node's INTERNAL-IP because they all can route to the api server internally.
 ```
-
-- `cluster_version`, `node_count`:
-```bash
-[master@localhost ~]$ kubectl get nodes
-NAME                    STATUS   ROLES           AGE   VERSION
-localhost.localdomain   Ready    control-plane   89d   v1.31.14
-worker-rt               Ready    <none>          64d   v1.31.14
+09:30:11 root@galileo ~ → kubectl get nodes -o wide
+NAME           STATUS   ROLES           AGE    VERSION   INTERNAL-IP       EXTERNAL-IP   OS-IMAGE                         KERNEL-VERSION     CONTAINER-RUNTIME
+controller-1   Ready    control-plane   176d   v1.29.2   192.168.206.3     <none>        Debian GNU/Linux 11 (bullseye)   6.6.0-1-amd64      containerd://1.6.21
+joule          Ready    <none>          174d   v1.29.2   192.168.206.82    <none>        Debian GNU/Linux 11 (bullseye)   6.6.0-1-rt-amd64   containerd://1.6.21
+worker-0       Ready    <none>          176d   v1.29.2   192.168.206.223   <none>        Debian GNU/Linux 11 (bullseye)   6.6.0-1-amd64      containerd://1.6.21
+worker-1       Ready    <none>          173d   v1.29.2   192.168.206.202   <none>        Debian GNU/Linux 11 (bullseye)   6.6.0-1-amd64      containerd://1.6.21
 ```
