@@ -1,6 +1,8 @@
 # Topology
 <img width="942" height="395" alt="image" src="https://github.com/user-attachments/assets/bd7a1ae6-d293-48c8-9264-dbcbd3e575aa" />
 
+Pre-requirement :
+1. Run whole steps of focom and get kubeconfig ( It's should be set as `$STARLINGX_KUBECONFIG_B64` )
 
 Target:
 1. Install NFO and use `kubeconfig` to register a `Cluster ID`.
@@ -68,7 +70,7 @@ docker build -t bmw.ece.ntust.edu.tw/<your-username>/nfo:latest .
 docker push bmw.ece.ntust.edu.tw/<your-username>/nfo:latest
 ```
 
-- Modify `values.yaml` 
+- Modify `values.yaml` ( Path : `nino-o2-nfo/nfo/k8s/chart`)
 ```
 image:
   repository: bmw.ece.ntust.edu.tw/<your-username>/nfo
@@ -316,18 +318,18 @@ NAME                    READY   STATUS    RESTARTS   AGE     IP            NODE 
 o2api-9ccd47478-8jmmf   5/5     Running   0          7d22h   172.16.43.9   worker-0   <none>           <none>
 ```
 
-- Service port:
+- Service port ( It's `30205` !! )
 ```
 08:41:49 root@galileo ~ → kubectl get svc -n oran-o2 | grep o2api
 o2api     NodePort   10.108.95.13   <none>        5005:30205/TCP    126d
 ```
 
-- Final API endpoint: `https://<Any STX node's INTERNAL-IP>:30205` . You can use any node's INTERNAL-IP because they all can route to the api server internally.
+- Final API endpoint: `https://<worker-1's Internal IP>:30205` . 
 ```
 09:30:11 root@galileo ~ → kubectl get nodes -o wide
 NAME           STATUS   ROLES           AGE    VERSION   INTERNAL-IP       EXTERNAL-IP   OS-IMAGE                         KERNEL-VERSION     CONTAINER-RUNTIME
 controller-1   Ready    control-plane   176d   v1.29.2   192.168.206.3     <none>        Debian GNU/Linux 11 (bullseye)   6.6.0-1-amd64      containerd://1.6.21
 joule          Ready    <none>          174d   v1.29.2   192.168.206.82    <none>        Debian GNU/Linux 11 (bullseye)   6.6.0-1-rt-amd64   containerd://1.6.21
 worker-0       Ready    <none>          176d   v1.29.2   192.168.206.223   <none>        Debian GNU/Linux 11 (bullseye)   6.6.0-1-amd64      containerd://1.6.21
-worker-1       Ready    <none>          173d   v1.29.2   192.168.206.202   <none>        Debian GNU/Linux 11 (bullseye)   6.6.0-1-amd64      containerd://1.6.21
+worker-1       Ready    <none>          173d   v1.29.2   192.168.206.202   <none>        Debian GNU/Linux 11 (bullseye)   6.6.0-1-amd64      containerd://1.6.21     <---- worker-1's Internal IP : 192.168.206.202
 ```
