@@ -29,6 +29,7 @@ from .tools.tools import (
 import logging
 import uuid
 import traceback
+import threading
 
 from datetime import timedelta
 logger = logging.getLogger(__name__)
@@ -123,98 +124,84 @@ class NfDeploymentInstanceViewSet(viewsets.ModelViewSet):
         instance.smo_callback_url = request.data.get('callback_url', '')
         instance.save()
 
-        # Allocate resources from existing infrastructure
-        #allocated_machines = self.allocate_machines(instance)
+        # Run helm deploy in a background thread so Gunicorn doesn't time out.
+        # The thread updates instantiation_state and operation_state when done;
+        # callers poll GET /deployments/{id}/ to observe progress.
+        operation_id = operation.operation_id
+        request_data_snapshot = dict(request.data)
 
+        def _background_deploy():
+            from django.db import connection as _db_conn
+            _db_conn.close()  # open a fresh thread-local DB connection
+            try:
+                inst = NfDeploymentInstance.objects.get(instance_id=instance_id)
+                op = VnfLcmOperation.objects.get(operation_id=operation_id)
 
-        # Deploy based on profile type
-        try:
-            if instance.descriptor.profile_type == 'kubernetes':
-                #result = self.deploy_kubernetes(instance, request.data, final_values)
-                result = self._execute_with_retry(
-                    operation,
-                    self.deploy_kubernetes,
-                    instance,
-                    request.data,
-                    final_values
-                )
-            elif instance.descriptor.profile_type == 'etsi_nfv':
-                result = self.deploy_to_vms(instance, allocated_machines, request.data)
-                result = self._execute_with_retry(
-                    operation,
-                    self.deploy_to_vms,
-                    instance,
-                    allocated_machines,
-                    request.data
-                )
-
-            print("---->----")
-            print(result)
-            if result['success']:
-                instance.instantiation_state = 'INSTANTIATED'
-                instance.deployed_cluster = instance.descriptor.target_cluster
-                logger.info("---------------------------------------")
-                logger.info(instance.descriptor.target_cluster)
-                #instance.allocated_machines.set(allocated_machines)
-                instance.save()
-
-                operation.operation_state = 'COMPLETED'
-                operation.progress_percentage = 100
-                operation.end_time = timezone.now()
-                operation.save()
-
-                return Response({
-                    'vnfLcmOpOccId': str(operation.operation_id),
-                    'operationState': 'COMPLETED'
-                }, status=status.HTTP_202_ACCEPTED)
-
-            else:
-                if operation.rollback_on_failure and operation.automatic_rollback:
-                    operation.operation_state = 'ROLLING_BACK'
-                    operation.save()
-
-                    rollback_success = self._execute_rollback(instance, operation)
-
-                    if rollback_success:
-                        operation.operation_state = 'ROLLED_BACK'
-                    else:
-                        operation.operation_state = 'FAILED'
+                if inst.descriptor.profile_type == 'kubernetes':
+                    result = self._execute_with_retry(
+                        op,
+                        self.deploy_kubernetes,
+                        inst,
+                        request_data_snapshot,
+                        final_values,
+                    )
                 else:
-                    operation.operation_state = 'FAILED'
-                    instance.instantiation_state = 'ERROR'
-                    instance.save()
+                    result = {'success': False, 'error': 'Unsupported profile type'}
 
-            operation.end_time = timezone.now()
-            operation.save()
+                logger.info(f"Background deploy result: {result}")
 
-            print(traceback.print_exc())
-            raise Exception(result.get('error', 'Deployment failed'))
+                if result['success']:
+                    inst.refresh_from_db()
+                    inst.instantiation_state = 'INSTANTIATED'
+                    inst.deployed_cluster = inst.descriptor.target_cluster
+                    inst.save()
 
-        except Exception as e:
-            print("Error")
-            instance.instantiation_state = 'ERROR'
-            instance.save()
-            operation.operation_state = 'FAILED'
-            operation.error_details = {'error': str(e)}
-            operation.end_time = timezone.now()
-            operation.save()
+                    op.refresh_from_db()
+                    op.operation_state = 'COMPLETED'
+                    op.progress_percentage = 100
+                    op.end_time = timezone.now()
+                    op.save()
+                else:
+                    op.refresh_from_db()
+                    if op.rollback_on_failure and op.automatic_rollback:
+                        op.operation_state = 'ROLLING_BACK'
+                        op.save()
+                        rollback_success = self._execute_rollback(inst, op)
+                        op.refresh_from_db()
+                        op.operation_state = 'ROLLED_BACK' if rollback_success else 'FAILED'
+                    else:
+                        op.operation_state = 'FAILED'
+                        inst.refresh_from_db()
+                        inst.instantiation_state = 'ERROR'
+                        inst.save()
+                    op.end_time = timezone.now()
+                    op.save()
 
-            print(traceback.format_exc())
+            except Exception as e:
+                logger.error(f"Background deploy failed: {e}\n{traceback.format_exc()}")
+                try:
+                    inst = NfDeploymentInstance.objects.get(instance_id=instance_id)
+                    inst.instantiation_state = 'ERROR'
+                    inst.save()
+                    op = VnfLcmOperation.objects.get(operation_id=operation_id)
+                    op.operation_state = 'FAILED'
+                    op.error_details = {'error': str(e)}
+                    op.end_time = timezone.now()
+                    op.save()
+                except Exception:
+                    pass
 
-            #return Response(
-            #    {'error': f'Deployment failed: {str(e)}'},
-            #    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            #)
+        t = threading.Thread(target=_background_deploy, daemon=True)
+        t.start()
 
-            return Response(
-                {
-                    'error': f'Deployment failed: {str(e)}',
-                    'vnfLcmOpOccId': str(operation.operation_id),
-                    'operationState': operation.operation_state,
-                    'rollbackExecuted': operation.rollback_executed if hasattr(operation, 'rollback_executed') else False
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response(
+            {
+                'vnfLcmOpOccId': str(operation_id),
+                'operationState': 'PROCESSING',
+                'message': 'Deployment started. Poll GET /deployments/{id}/ for state updates.',
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
 
     def deploy_to_vms(self, instance, machines, params):
         """Deploy to VMs using  existing infrastructure"""
