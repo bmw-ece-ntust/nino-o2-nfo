@@ -6,7 +6,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 FROM alpine:3.20
-RUN apk add --no-cache python3 curl
+RUN apk add --no-cache python3 curl git
 COPY --from=builder /venv /venv
 ENV PATH="/venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
