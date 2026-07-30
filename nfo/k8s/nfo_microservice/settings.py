@@ -51,6 +51,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'nfo_microservice.jwt_auth.JWTAuthenticationMiddleware',
 ]
 
 ROOT_URLCONF = 'nfo_microservice.urls'

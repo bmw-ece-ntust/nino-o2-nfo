@@ -1,4 +1,6 @@
+helm
 requests
+PyJWT
 django
 djangorestframework
 pyhelm
