@@ -1037,7 +1037,7 @@ class DeploymentDescriptorListViewSet(viewsets.ModelViewSet):
     queryset = DeploymentDescriptor.objects.all()
     serializer_class = DeploymentDescriptorDetailedSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['profile_type', 'target_cluster', 'target_cluster__status']
+    filterset_fields = ['profile_type', 'target_cluster', 'target_cluster__connection_status']
     search_fields = ['name', 'description', 'artifact_name']
     ordering_fields = ['name', 'created_at', 'updated_at']
     ordering = ['-created_at']
@@ -1064,13 +1064,13 @@ class NfDeploymentInstanceListViewSet(viewsets.ModelViewSet):
     Comprehensive list API for NF Deployment Instances
     """
     queryset = NfDeploymentInstance.objects.select_related(
-        'descriptor', 'deployed_cluster'
+        'descriptor'
     ).prefetch_related('operations')
     serializer_class = NfDeploymentInstanceDetailedSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = [
         'instantiation_state', 'descriptor__profile_type',
-        'deployed_cluster', 'descriptor__target_cluster'
+        'descriptor__target_cluster'
     ]
     search_fields = ['name', 'descriptor__name', 'deployment_namespace']
     ordering_fields = ['name', 'created_at', 'updated_at', 'instantiation_state']
